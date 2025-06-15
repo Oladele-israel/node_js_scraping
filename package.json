@@ -1,0 +1,23 @@
+{
+  "name": "node_js_scraping",
+  "version": "1.0.0",
+  "description": "web crawler with nodejs",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Oladele-israel/node_js_scraping.git"
+  },
+  "author": "oladele_israel",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Oladele-israel/node_js_scraping/issues"
+  },
+  "homepage": "https://github.com/Oladele-israel/node_js_scraping#readme",
+  "dependencies": {
+    "puppeteer": "^24.10.1"
+  }
+}
