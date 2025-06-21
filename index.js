@@ -1,29 +1,44 @@
-import puppeteer from "puppeteer";
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { retry } from "./utils/retry.js";
+import { getUserAgent } from "./utils/userAgent.js";
+
+puppeteer.use(StealthPlugin());
 
 const scrape = async () => {
-  try {
-    const browser = await puppeteer.launch({
-      headless: false,
-    });
+  const url = `https://nigeriapropertycentre.com/`;
 
+  const userInput = 'Rivers'
+  const userAgent = getUserAgent();
+
+  let browser;
+
+
+  try {
+
+    const launchOptions = {
+      headless: false, //set to 'new' in prod
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    };
+
+    browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
 
-    const url = `https://nigeriapropertycentre.com/`;
+    await page.setUserAgent(userAgent);
+    await page.setDefaultTimeout(20000);
 
-    const userInput = 'Rivers'
 
+    await retry(() => page.goto(url, { waitUntil: 'domcontentloaded' }));
+    await retry(() => page.click('label[for="cid-for-rent"]'));
 
-    await page.goto(url, { waitUntil: "domcontentloaded" });
-
-    await page.click('label[for="cid-for-rent"]');
-    // fill the seacrch input form for the location
     await page.type('#propertyLocation', userInput, { delay: 100 });
 
-    // Wait for the suggestion list to appear
-    await page.waitForFunction(() => {
-      const ul = document.querySelector('#eac-container-propertyLocation ul');
-      return ul && ul.style.display !== 'none' && ul.children.length > 0;
-    }, { timeout: 10000 });
+    await retry(() =>
+      page.waitForFunction(() => {
+        const ul = document.querySelector('#eac-container-propertyLocation ul');
+        return ul && ul.style.display !== 'none' && ul.children.length > 0;
+      })
+    );
 
     // Get the list of suggestions
     const suggestions = await page.$$eval('#eac-container-propertyLocation ul li .eac-item', nodes =>
@@ -32,17 +47,16 @@ const scrape = async () => {
 
     console.log('Autocomplete Suggestions:===>>', suggestions);
 
-    const suggestionItems = await page.$$('#eac-container-propertyLocation ul li .eac-item');
-
     const matchIndex = suggestions.findIndex(text =>
       text.toLowerCase().includes(userInput.toLowerCase())
     );
 
     if (matchIndex === -1) {
-      throw new Error(`❌ No match found for: ${userInput}`);
+      throw new Error(`No match found for: ${userInput}`);
     }
 
     const selector = `#eac-container-propertyLocation ul li:nth-child(${matchIndex + 1}) .eac-item`;
+    await retry(() => page.click(selector));
     console.log(`✅ Clicking match: ${suggestions[matchIndex]}`);
 
     // Click fresh selector (no stale handle)
@@ -77,21 +91,30 @@ const scrape = async () => {
 
     console.log("Selecting Max Price...");
     // 7. Select Max Price = ₦2,000,000 (value="2000000")
-    await page.select('select#maxprice', '50000000000');
+    await page.select('select#maxprice', '150000000');
 
     // 8. Submit form by clicking search button
     console.log("Submitting the search form...");
     await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle0' }),
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
       page.click('button[type="submit"]'),
     ]);
 
-    console.log("Search form submitted, waiting for results...");
+    console.log("Waiting for search results to load...");
+
+    // Ensure the new body class is present
+    await page.waitForFunction(() => {
+      return document.body.classList.contains('property-list-page');
+    }, { timeout: 20000 });
+
+    // Then wait for the listing container
+    await page.waitForSelector('.wp-block.property.list', { timeout: 20000 });
+
+    console.log("✅ Listings loaded!");
 
 
-
-    // // 9. Wait for search results page to load
-    // await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+    // // // 9. Wait for search results page to load
+    // await page.waitForNyyyavigation({ waitUntil: 'domcontentloaded' });
 
 
     // const listings = await page.$$eval('div.property-list', (nodes) =>
@@ -123,7 +146,7 @@ const scrape = async () => {
     //   })
     // );
 
-    // console.dir(listings, { depth: null });
+    console.dir(listings, { depth: null });
 
 
     await browser.close();

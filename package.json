@@ -18,6 +18,8 @@
   },
   "homepage": "https://github.com/Oladele-israel/node_js_scraping#readme",
   "dependencies": {
-    "puppeteer": "^24.10.2"
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "random-useragent": "^0.5.0"
   }
 }
