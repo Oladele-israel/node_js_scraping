@@ -16,6 +16,7 @@ import { getUserAgent } from "./utils/userAgent.js";
  * *        bedrooms: number of bedrooms (default: any ranging from 1 to 6)
  * *        minPrice: minimum price (default: 0, from 250000 above)
  * *        maxPrice: maximum price (default: 50000000000, max)
+ * crawles paginated listings 
  * 
  */
 
@@ -26,6 +27,8 @@ const scrape = async () => {
 
   const userInput = 'Port Harcourt'
   const userAgent = getUserAgent();
+  const MAX_PAGES = 5;
+  let listings = [];
 
   let browser;
 
@@ -120,11 +123,11 @@ const scrape = async () => {
 
     console.log("Selecting min...");
     // 6. Select Min Price = ₦500,000 (value="500000")
-    await page.select('select#minprice', '100000');
+    await page.select('select#minprice', '250000');
 
     console.log("Selecting Max Price...");
     // 7. Select Max Price = ₦2,000,000 (value="2000000")
-    await page.select('select#maxprice', '150000000');
+    await page.select('select#maxprice', '50000000000');
 
     // 8. Submit form by clicking search button
     console.log("Submitting the search form...");
@@ -148,53 +151,54 @@ const scrape = async () => {
 
     await page.waitForSelector('.wp-block.property.list', { timeout: 20000 });
 
-    const listings = await page.$$eval('[itemtype="https://schema.org/ListItem"]', nodes =>
-      nodes.map(node => {
-        const getText = (selector) => {
-          const el = node.querySelector(selector);
-          return el ? el.textContent.trim().replace(/\s+/g, ' ') : null;
-        };
+     const extractListings = async () =>
+      await page.$$eval('[itemtype="https://schema.org/ListItem"]', nodes =>
+        nodes.map(node => {
+          const q = sel => node.querySelector(sel);
+          const getText = sel => q(sel)?.textContent.trim().replace(/\s+/g, ' ') || null;
+          const getAttr = (sel, attr) => q(sel)?.getAttribute(attr) || null;
+          const getRoom = label =>
+            [...node.querySelectorAll('.aux-info li')]
+              .find(li => li.textContent.toLowerCase().includes(label))
+              ?.querySelector('span')?.textContent.trim() || null;
+          const price = node.querySelectorAll('span.price')[1]?.textContent.replace(/,/g, '').trim() || null;
 
-        const getAttr = (selector, attr) => {
-          const el = node.querySelector(selector);
-          return el ? el.getAttribute(attr) : null;
-        };
+          return {
+            title: getText('[itemprop="name"]'),
+            url: getAttr('[itemprop="url"]', 'href'),
+            image: getAttr('[itemprop="image"]', 'src'),
+            description: getText('[itemprop="description"] p'),
+            price,
+            address: getText('address strong'),
+            phone: getText('.marketed-by strong'),
+            bedrooms: getRoom('bedroom'),
+            bathrooms: getRoom('bathroom'),
+            toilets: getRoom('toilet'),
+            area: getRoom('sqm'),
+            parkingSpaces: getRoom('parking'),
+          };
+        })
+      );
 
-        // ✅ Fix for price: get second span.price (the actual value), not just '₦'
-        const priceEl = node.querySelectorAll('span.price');
-        let price = null;
-        if (priceEl.length >= 2) {
-          price = priceEl[1].textContent.trim().replace(/,/g, '');
-        }
+    let currentPage = 1;
+    while (currentPage <= MAX_PAGES) {
+      await page.waitForSelector('.wp-block.property.list', { timeout: 20000 });
+      listings.push(...(await extractListings()));
 
-        // ✅ Get rooms data reliably
-        const getRoomDetail = (label) => {
-          const li = [...node.querySelectorAll('.aux-info li')].find(li => li.textContent.toLowerCase().includes(label));
-          return li ? li.querySelector('span')?.textContent.trim() : null;
-        };
+      const nextBtn = await page.$('a[aria-label="Next »"], a[rel="next"]');
+      if (!nextBtn) break;
 
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
+        nextBtn.click(),
+      ]);
 
-        return {
-          title: getText('[itemprop="name"]'),
-          url: getAttr('[itemprop="url"]', 'href'),
-          image: getAttr('[itemprop="image"]', 'src'),
-          description: getText('[itemprop="description"] p'),
-          price,
-          address: getText('address strong'),
-          phone: getText('.marketed-by strong'),
-          bedrooms: getRoomDetail('bedroom'),
-          bathrooms: getRoomDetail('bathroom'),
-          toilets: getRoomDetail('toilet'),
-          area: getRoomDetail('sqm'),
-          parkingSpaces: getRoomDetail('parking'),
-        };
-      })
-    );
+      currentPage++;
+    }
 
-    console.log("✅ Scraped Listings:");
+    console.log(`✅ Scraped ${listings.length} listings across ${currentPage} page(s).`);
     console.dir(listings, { depth: null });
 
-    // =======lets hanle pagination ===============================================================
 
 
     await browser.close();
