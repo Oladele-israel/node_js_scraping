@@ -3,12 +3,28 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { retry } from "./utils/retry.js";
 import { getUserAgent } from "./utils/userAgent.js";
 
+
+/**
+ * author: Oladele Israel
+ * title: web scraping project for nigeriapropertycentre.com
+ * reason: to get data to display on Jarleh
+ * 
+ * params: location: area || city || state, or combined  
+ *                  (e.g: Port Harcourt, Rivers, or combined Port Harcourt, Rivers) 
+ * *        propertyType: flat/apartment(value: 1), 
+ *                        house(2), land(5), commercial property(3)
+ * *        bedrooms: number of bedrooms (default: any ranging from 1 to 6)
+ * *        minPrice: minimum price (default: 0, from 250000 above)
+ * *        maxPrice: maximum price (default: 50000000000, max)
+ * 
+ */
+
 puppeteer.use(StealthPlugin());
 
 const scrape = async () => {
   const url = `https://nigeriapropertycentre.com/`;
 
-  const userInput = 'Lagos'
+  const userInput = 'Port Harcourt'
   const userAgent = getUserAgent();
 
   let browser;
@@ -29,7 +45,13 @@ const scrape = async () => {
 
 
     await retry(() => page.goto(url, { waitUntil: 'domcontentloaded' }));
-    await retry(() => page.click('label[for="cid-for-rent"]'));
+
+    // -sale for buying the apartment
+    // -rent for renting the apartment
+    // 'cid-short-let' lease for leasing the apartment
+
+    await retry(() => page.click('label[for="cid-for-sale"]'));
+    // await retry(() => page.click('label[for="cid-for-rent"]'));
 
     await page.type('#propertyLocation', userInput, { delay: 100 });
 
@@ -171,6 +193,8 @@ const scrape = async () => {
 
     console.log("✅ Scraped Listings:");
     console.dir(listings, { depth: null });
+
+    // =======lets hanle pagination ===============================================================
 
 
     await browser.close();
